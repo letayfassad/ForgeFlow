@@ -7,6 +7,7 @@ import json
 import logging
 from typing import Any
 
+import keyboard
 import websockets
 from websockets.server import WebSocketServerProtocol
 
@@ -25,6 +26,20 @@ class RunnerServer:
         self.port = port
         self._executor = ActionExecutor()
         self._clients: set[WebSocketServerProtocol] = set()
+        self._emergency_hotkey: str | None = None
+        self._loop: asyncio.AbstractEventLoop | None = None
+
+    def _register_emergency_stop(self) -> None:
+        """Global Ctrl+Shift+Q abort via keyboard library."""
+        if self._emergency_hotkey is not None:
+            return
+        keyboard.add_hotkey(
+            "ctrl+shift+q",
+            lambda: self._executor.request_stop(),
+            suppress=False,
+        )
+        self._emergency_hotkey = "ctrl+shift+q"
+        logger.info("Emergency stop hotkey registered: Ctrl+Shift+Q")
 
     async def _send(self, ws: WebSocketServerProtocol, message: dict[str, Any]) -> None:
         await ws.send(json.dumps(message))
@@ -37,7 +52,9 @@ class RunnerServer:
             )
 
     def _on_progress(self, step: int, total: int, action: str) -> None:
-        asyncio.create_task(
+        if self._loop is None:
+            return
+        asyncio.run_coroutine_threadsafe(
             self._broadcast(
                 {
                     "type": "progress",
@@ -45,7 +62,8 @@ class RunnerServer:
                     "total": total,
                     "action": action,
                 }
-            )
+            ),
+            self._loop,
         )
 
     async def _handle_execute(self, ws: WebSocketServerProtocol, data: dict[str, Any]) -> None:
@@ -93,6 +111,7 @@ class RunnerServer:
         )
 
     async def handler(self, ws: WebSocketServerProtocol) -> None:
+        self._loop = asyncio.get_running_loop()
         self._clients.add(ws)
         logger.info("Client connected: %s", ws.remote_address)
 
@@ -133,6 +152,15 @@ class RunnerServer:
             logger.info("Client disconnected: %s", ws.remote_address)
 
     async def start(self) -> None:
+        self._register_emergency_stop()
         logger.info("Starting ForgeFlow runner on ws://%s:%s", self.host, self.port)
         async with websockets.serve(self.handler, self.host, self.port):
+            await asyncio.Future()
+
+    async def start_for_test(self, ready_event: asyncio.Event | None = None) -> None:
+        """Start server for integration tests; signals ready_event when listening."""
+        self._register_emergency_stop()
+        async with websockets.serve(self.handler, self.host, self.port):
+            if ready_event:
+                ready_event.set()
             await asyncio.Future()

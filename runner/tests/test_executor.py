@@ -17,34 +17,66 @@ class TestExecutor(unittest.TestCase):
                     {"type": "wait", "seconds": 0.1},
                     {"type": "type_text", "text": "hi", "interval": 0.01},
                     {"type": "click"},
+                    {"type": "press_key", "key": "enter"},
+                    {"type": "hotkey", "keys": ["ctrl", "s"]},
+                    {"type": "scroll", "amount": -3},
                 ],
             }
         )
 
     @patch("forgeflow_runner.executor.pyautogui")
-    def test_execute_calls_pyautogui_with_timing(self, mock_pyautogui):
+    @patch("forgeflow_runner.executor.mouse")
+    @patch("forgeflow_runner.executor.keyboard")
+    @patch("forgeflow_runner.executor._keyboard_controller")
+    @patch("forgeflow_runner.executor._mouse_controller")
+    def test_execute_calls_libs_with_timing(
+        self,
+        mock_mouse_ctrl,
+        mock_kb_ctrl,
+        mock_keyboard,
+        mock_mouse_lib,
+        mock_pyautogui,
+    ):
+        mock_mouse_ctrl.position = (0, 0)
         executor = ActionExecutor(dry_run=False)
-        executor._pyautogui = mock_pyautogui
 
-        sequence = self._make_test_sequence()
-        result = executor.execute(sequence)
+        result = executor.execute(self._make_test_sequence())
 
         self.assertTrue(result.success)
-        self.assertEqual(result.steps_completed, 4)
-        mock_pyautogui.moveTo.assert_called_once_with(10, 20, duration=0.1)
-        mock_pyautogui.write.assert_called_once_with("hi", interval=0.01)
+        self.assertEqual(result.steps_completed, 7)
+        self.assertEqual(mock_mouse_ctrl.position, (10, 20))
+        self.assertEqual(mock_kb_ctrl.type.call_count, 2)  # "hi"
         mock_pyautogui.click.assert_called_once()
+        mock_keyboard.press_and_release.assert_called_once_with("enter")
+        mock_keyboard.send.assert_called_once_with("ctrl+s")
+        mock_mouse_lib.wheel.assert_called_once_with(-3)
+
+        move_log = next(t for t in result.timing_log if t["type"] == "move_mouse")
+        self.assertEqual(move_log["library"], "pynput")
+        type_log = next(t for t in result.timing_log if t["type"] == "type_text")
+        self.assertEqual(type_log["library"], "pynput")
 
     @patch("forgeflow_runner.executor.pyautogui")
-    def test_execute_consistent_success_twice(self, mock_pyautogui):
+    @patch("forgeflow_runner.executor.mouse")
+    @patch("forgeflow_runner.executor.keyboard")
+    @patch("forgeflow_runner.executor._keyboard_controller")
+    @patch("forgeflow_runner.executor._mouse_controller")
+    def test_execute_consistent_success_twice(
+        self,
+        mock_mouse_ctrl,
+        mock_kb_ctrl,
+        mock_keyboard,
+        mock_mouse_lib,
+        mock_pyautogui,
+    ):
+        mock_mouse_ctrl.position = (0, 0)
         executor = ActionExecutor(dry_run=False)
-        executor._pyautogui = mock_pyautogui
         sequence = self._make_test_sequence()
 
         for _ in range(2):
             result = executor.execute(sequence)
             self.assertTrue(result.success)
-            self.assertEqual(len(result.timing_log), 4)
+            self.assertEqual(len(result.timing_log), 7)
 
     def test_stop_requested_mid_execution(self):
         executor = ActionExecutor(dry_run=True)
@@ -78,7 +110,7 @@ class TestExecutor(unittest.TestCase):
         )
         result = executor.execute(self._make_test_sequence())
         self.assertTrue(result.success)
-        self.assertEqual(len(progress_calls), 4)
+        self.assertEqual(len(progress_calls), 7)
 
 
 if __name__ == "__main__":

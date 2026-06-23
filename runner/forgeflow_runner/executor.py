@@ -1,4 +1,4 @@
-"""Desktop action executor using pyautogui and related libraries."""
+"""Desktop action executor using pyautogui, pynput, keyboard, and mouse."""
 
 from __future__ import annotations
 
@@ -9,7 +9,11 @@ import time
 from dataclasses import dataclass, field
 from typing import Callable
 
+import keyboard
+import mouse
 import pyautogui
+from pynput.keyboard import Controller as KeyboardController
+from pynput.mouse import Controller as MouseController
 
 from .schema import (
     ActionSequence,
@@ -31,6 +35,9 @@ logger = logging.getLogger(__name__)
 
 pyautogui.FAILSAFE = True
 pyautogui.PAUSE = 0.05
+
+_mouse_controller = MouseController()
+_keyboard_controller = KeyboardController()
 
 
 @dataclass
@@ -55,6 +62,8 @@ class ActionExecutor:
         self._on_progress = on_progress
         self._dry_run = dry_run
         self._pyautogui = pyautogui
+        self._mouse = _mouse_controller
+        self._keyboard = _keyboard_controller
 
     def request_stop(self) -> None:
         self._stop_requested = True
@@ -98,7 +107,12 @@ class ActionExecutor:
                     timing_log=timing_log,
                 )
             elapsed = time.perf_counter() - start
-            timing_log.append({"step": i + 1, "type": action.type, "elapsed": elapsed})
+            timing_log.append({
+                "step": i + 1,
+                "type": action.type,
+                "elapsed": elapsed,
+                "library": self._library_for(action),
+            })
 
         return ExecutionResult(
             success=True,
@@ -107,14 +121,28 @@ class ActionExecutor:
             timing_log=timing_log,
         )
 
+    @staticmethod
+    def _library_for(action: ForgeAction) -> str:
+        if isinstance(action, MoveMouseAction):
+            return "pynput"
+        if isinstance(action, TypeTextAction):
+            return "pynput"
+        if isinstance(action, (PressKeyAction, HotkeyAction)):
+            return "keyboard"
+        if isinstance(action, ScrollAction):
+            return "mouse"
+        if isinstance(action, (ClickAction, DoubleClickAction, RightClickAction)):
+            return "pyautogui"
+        return "stdlib"
+
     def _execute_action(self, action: ForgeAction) -> None:
         if self._dry_run:
-            logger.info("[DRY RUN] %s", action.type)
+            logger.info("[DRY RUN] %s via %s", action.type, self._library_for(action))
             time.sleep(0.01)
             return
 
         if isinstance(action, MoveMouseAction):
-            self._pyautogui.moveTo(action.x, action.y, duration=action.duration)
+            self._move_mouse(action.x, action.y, action.duration)
         elif isinstance(action, ClickAction):
             if action.x is not None and action.y is not None:
                 self._pyautogui.click(action.x, action.y, button=action.button)
@@ -131,20 +159,39 @@ class ActionExecutor:
             else:
                 self._pyautogui.rightClick()
         elif isinstance(action, TypeTextAction):
-            self._pyautogui.write(action.text, interval=action.interval)
+            self._type_text(action.text, action.interval)
         elif isinstance(action, PressKeyAction):
-            self._pyautogui.press(action.key)
+            keyboard.press_and_release(action.key)
         elif isinstance(action, HotkeyAction):
-            self._pyautogui.hotkey(*action.keys)
+            keyboard.send("+".join(action.keys))
         elif isinstance(action, WaitAction):
             time.sleep(action.seconds)
         elif isinstance(action, OpenApplicationAction):
             self._open_application(action.target)
         elif isinstance(action, ScrollAction):
-            if action.x is not None and action.y is not None:
-                self._pyautogui.scroll(action.amount, x=action.x, y=action.y)
-            else:
-                self._pyautogui.scroll(action.amount)
+            mouse.wheel(action.amount)
+
+    def _move_mouse(self, x: float, y: float, duration: float) -> None:
+        """Smooth visible mouse movement via pynput over the requested duration."""
+        start_x, start_y = self._mouse.position
+        steps = max(int(duration / 0.02), 1)
+        step_delay = duration / steps
+        for i in range(1, steps + 1):
+            if self._stop_requested:
+                return
+            t = i / steps
+            nx = int(start_x + (x - start_x) * t)
+            ny = int(start_y + (y - start_y) * t)
+            self._mouse.position = (nx, ny)
+            time.sleep(step_delay)
+
+    def _type_text(self, text: str, interval: float) -> None:
+        """Type text character-by-character via pynput with per-char interval."""
+        for char in text:
+            if self._stop_requested:
+                return
+            self._keyboard.type(char)
+            time.sleep(interval)
 
     def _open_application(self, target: str) -> None:
         target_lower = target.lower()

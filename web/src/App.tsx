@@ -21,6 +21,7 @@ function AppContent() {
     setCurrentExecutionId,
     setLibrary,
     setHistory,
+    setTaskDescription,
     currentExecutionId,
   } = useAppStore();
 
@@ -108,6 +109,17 @@ function AppContent() {
     }
   };
 
+  const handleLibraryLoad = () => {
+    setLibrary(loadLibrary());
+  };
+
+  const handleHistoryRerun = () => {
+    const seq = useAppStore.getState().currentSequence;
+    if (seq) {
+      setTaskDescription(seq.description ?? seq.name ?? '');
+    }
+  };
+
   return (
     <Layout>
       {activeTab === 'create' && (
@@ -116,8 +128,8 @@ function AppContent() {
           <ActionPreview onRun={handleRun} onStop={handleStop} />
         </div>
       )}
-      {activeTab === 'library' && <LibraryView onLoad={() => {}} />}
-      {activeTab === 'history' && <HistoryView onRerun={() => {}} />}
+      {activeTab === 'library' && <LibraryView onLoad={handleLibraryLoad} />}
+      {activeTab === 'history' && <HistoryView onRerun={handleHistoryRerun} />}
     </Layout>
   );
 }
