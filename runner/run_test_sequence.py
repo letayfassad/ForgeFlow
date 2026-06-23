@@ -14,17 +14,8 @@ from pathlib import Path
 import websockets
 
 RUNNER_DIR = Path(__file__).parent
-
-TEST_SEQUENCE = {
-    "version": "1.0",
-    "name": "Verification Run",
-    "actions": [
-        {"type": "move_mouse", "x": 10, "y": 10, "duration": 0.05},
-        {"type": "wait", "seconds": 0.05},
-        {"type": "type_text", "text": "x", "interval": 0.01},
-        {"type": "click", "x": 10, "y": 10},
-    ],
-}
+SHARED_DIR = RUNNER_DIR.parent / "shared"
+TEST_SEQUENCE = json.loads((SHARED_DIR / "verification-sequence.json").read_text(encoding="utf-8"))
 
 
 def _free_port() -> int:
@@ -34,7 +25,6 @@ def _free_port() -> int:
 
 
 def _launch_main_py(port: int) -> tuple[subprocess.Popen[str], list[str]]:
-    """Start the real main.py entry point as a subprocess."""
     cmd = [sys.executable, "main.py", "--host", "127.0.0.1", "--port", str(port)]
     print(f"Launching: {' '.join(cmd)}")
     proc = subprocess.Popen(
@@ -89,12 +79,12 @@ async def _run_client_roundtrip(run_number: int, port: int) -> dict:
     return {
         "run": run_number,
         "entry_point": "python main.py",
+        "sequence_file": str(SHARED_DIR / "verification-sequence.json"),
         "ping": pong["type"],
         "success": complete["success"],
         "progress_steps": len(progress),
         "error": complete.get("error"),
         "message_types": [m["type"] for m in messages],
-        "libraries_expected": ["pynput", "stdlib", "pynput", "pyautogui"],
     }
 
 
@@ -124,6 +114,16 @@ async def main_async() -> int:
         for line in server_lines:
             if "forgeflow.execute" in line or "pyautogui active" in line:
                 print(line.rstrip())
+
+        required_libs = ("pynput", "pyautogui", "keyboard", "mouse")
+        log_text = "".join(server_lines)
+        for lib in required_libs:
+            if f"library={lib}" not in log_text:
+                print(f"ERROR: missing library={lib} in executor logs")
+                return 1
+        if "'seconds': 0.1" not in log_text:
+            print("ERROR: wait seconds=0.1 not honored in logs")
+            return 1
 
         return 0 if all_ok else 1
     finally:

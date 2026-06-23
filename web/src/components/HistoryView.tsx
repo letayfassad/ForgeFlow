@@ -1,13 +1,13 @@
 import type { ReactNode } from 'react';
 import { CheckCircle, Clock, RotateCcw, XCircle } from 'lucide-react';
-import type { ExecutionStatus } from '../types/actions';
+import type { ExecutionRecord, ExecutionStatus } from '../types/actions';
 import { useAppStore } from '../stores/appStore';
 import { formatTimestamp } from '../lib/utils';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 
 interface HistoryViewProps {
-  onRerun: () => void;
+  onRerun: (record: ExecutionRecord) => void;
 }
 
 const statusIcon: Record<ExecutionStatus, ReactNode> = {
@@ -19,14 +19,12 @@ const statusIcon: Record<ExecutionStatus, ReactNode> = {
 };
 
 export function HistoryView({ onRerun }: HistoryViewProps) {
-  const { history, setCurrentSequence, setActiveTab } = useAppStore();
+  const { history } = useAppStore();
 
   const handleRerun = (id: string) => {
     const record = history.find((r) => r.id === id);
     if (!record) return;
-    setCurrentSequence(record.sequence);
-    setActiveTab('create');
-    onRerun();
+    onRerun(record);
   };
 
   return (

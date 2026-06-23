@@ -5,6 +5,7 @@ import { HistoryView } from './components/HistoryView';
 import { Layout } from './components/Layout';
 import { LibraryView } from './components/LibraryView';
 import { TaskInput } from './components/TaskInput';
+import type { ExecutionRecord } from './types/actions';
 import { appendHistory, loadHistory, loadLibrary, updateHistoryRecord } from './lib/persistence';
 import { RunnerClient } from './lib/websocket';
 import { useAppStore } from './stores/appStore';
@@ -22,6 +23,8 @@ function AppContent() {
     setLibrary,
     setHistory,
     setTaskDescription,
+    setCurrentSequence,
+    setActiveTab,
     currentExecutionId,
   } = useAppStore();
 
@@ -113,11 +116,10 @@ function AppContent() {
     setLibrary(loadLibrary());
   };
 
-  const handleHistoryRerun = () => {
-    const seq = useAppStore.getState().currentSequence;
-    if (seq) {
-      setTaskDescription(seq.description ?? seq.name ?? '');
-    }
+  const handleHistoryRerun = (record: ExecutionRecord) => {
+    setCurrentSequence(record.sequence);
+    setTaskDescription(record.sequence.description ?? record.automationName);
+    setActiveTab('create');
   };
 
   return (

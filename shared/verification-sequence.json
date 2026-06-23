@@ -1,0 +1,13 @@
+{
+  "version": "1.0",
+  "name": "Verification Sequence",
+  "description": "Canonical verification sequence exercising pynput, pyautogui, keyboard, and mouse",
+  "actions": [
+    { "type": "move_mouse", "x": 10, "y": 10, "duration": 0.05, "label": "Move (pynput)" },
+    { "type": "wait", "seconds": 0.1, "label": "Wait 0.1s" },
+    { "type": "type_text", "text": "x", "interval": 0.01, "label": "Type (pynput)" },
+    { "type": "click", "x": 10, "y": 10, "label": "Click coords (pyautogui)" },
+    { "type": "press_key", "key": "escape", "label": "Press escape (keyboard)" },
+    { "type": "scroll", "amount": 1, "label": "Scroll (mouse)" }
+  ]
+}

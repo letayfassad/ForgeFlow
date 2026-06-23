@@ -1,8 +1,10 @@
 /**
  * @vitest-environment node
  *
- * Drives the shipped RunnerClient against a live `python main.py` subprocess.
+ * Drives the shipped RunnerClient against a live `python main.py` subprocess
+ * using the canonical shared/verification-sequence.json fixture.
  */
+import { readFileSync } from 'node:fs';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createServer } from 'node:net';
 import { dirname, join } from 'node:path';
@@ -13,17 +15,13 @@ import { RunnerClient } from './websocket';
 import { validateSequence } from './schema';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const RUNNER_DIR = join(__dirname, '..', '..', '..', 'runner');
+const ROOT = join(__dirname, '..', '..', '..');
+const RUNNER_DIR = join(ROOT, 'runner');
 
-const TEST_SEQUENCE = validateSequence({
-  version: '1.0',
-  name: 'RunnerClient E2E',
-  actions: [
-    { type: 'move_mouse', x: 5, y: 5, duration: 0.05 },
-    { type: 'wait', seconds: 0.05 },
-    { type: 'click', x: 5, y: 5 },
-  ],
-});
+const rawSeq = JSON.parse(
+  readFileSync(join(ROOT, 'shared', 'verification-sequence.json'), 'utf-8'),
+);
+const TEST_SEQUENCE = validateSequence(rawSeq);
 
 function getFreePort(): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -34,8 +32,7 @@ function getFreePort(): Promise<number> {
         reject(new Error('no port'));
         return;
       }
-      const port = addr.port;
-      server.close(() => resolve(port));
+      server.close(() => resolve(addr.port));
     });
   });
 }
@@ -65,7 +62,6 @@ let runnerProc: ChildProcess | null = null;
 let port = 0;
 
 beforeAll(async () => {
-  // Polyfill browser WebSocket so RunnerClient uses the same code path as the dashboard
   globalThis.WebSocket = WebSocket as unknown as typeof globalThis.WebSocket;
 
   port = await getFreePort();
@@ -89,10 +85,7 @@ describe('RunnerClient against live python main.py', () => {
     const client = new RunnerClient(`ws://127.0.0.1:${port}`);
     const messages: string[] = [];
 
-    const unsub = client.onMessage((msg) => {
-      messages.push(msg.type);
-    });
-
+    const unsub = client.onMessage((msg) => messages.push(msg.type));
     client.connect();
 
     await new Promise<void>((resolve, reject) => {
@@ -113,7 +106,7 @@ describe('RunnerClient against live python main.py', () => {
     client.execute(TEST_SEQUENCE);
 
     await new Promise<void>((resolve, reject) => {
-      const deadline = setTimeout(() => reject(new Error('execute timeout')), 15000);
+      const deadline = setTimeout(() => reject(new Error('execute timeout')), 20000);
       const check = () => {
         if (messages.includes('complete')) {
           clearTimeout(deadline);
@@ -127,6 +120,7 @@ describe('RunnerClient against live python main.py', () => {
 
     expect(messages).toContain('progress');
     expect(messages).toContain('complete');
+    expect(TEST_SEQUENCE.actions.length).toBe(6);
 
     unsub();
     client.disconnect();
