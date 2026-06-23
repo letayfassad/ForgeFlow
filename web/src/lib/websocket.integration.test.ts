@@ -89,9 +89,9 @@ describe('RunnerClient against live python main.py', () => {
     client.connect();
 
     await new Promise<void>((resolve, reject) => {
-      const deadline = setTimeout(() => reject(new Error('connect timeout')), 10000);
+      const deadline = setTimeout(() => reject(new Error('connect/pong timeout')), 10000);
       const check = () => {
-        if (client.isConnected()) {
+        if (messages.includes('pong')) {
           clearTimeout(deadline);
           resolve();
         } else {

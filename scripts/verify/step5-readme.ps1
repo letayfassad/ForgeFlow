@@ -10,7 +10,7 @@ New-Item -ItemType Directory -Force -Path $ScratchDir | Out-Null
 
 $lines = Get-Content $readmePath
 
-function Get-Section([string]$Heading) {
+function Get-Section([string]$Heading, [switch]$StopAtSubsection) {
     $pattern = "^## $([regex]::Escape($Heading))\s*$"
     $start = -1
     for ($i = 0; $i -lt $lines.Count; $i++) {
@@ -20,6 +20,7 @@ function Get-Section([string]$Heading) {
     $body = @()
     for ($j = $start; $j -lt $lines.Count; $j++) {
         if ($lines[$j] -match "^## ") { break }
+        if ($StopAtSubsection -and $lines[$j] -match "^### ") { break }
         $body += $lines[$j]
     }
     return ($body -join "`n").Trim()
@@ -54,7 +55,7 @@ $sections = @(
     (Get-SubSection "Example 2: Click and Scroll"),
     "",
     "--- SAFETY ---",
-    (Get-Section "Safety"),
+    (Get-Section "Safety" -StopAtSubsection),
     "",
     "--- EMERGENCY STOP ---",
     (Get-SubSection "How to Emergency Stop")
@@ -78,4 +79,19 @@ foreach ($needle in @("npm install", "pip install", "python main.py", "npm run d
         exit 1
     }
 }
+
+# Emergency-stop steps must appear exactly once (in EMERGENCY STOP, not duplicated in SAFETY)
+$stopStep = "Click **Emergency Stop** in the dashboard"
+$stopCount = ([regex]::Matches($content, [regex]::Escape($stopStep))).Count
+if ($stopCount -ne 1) {
+    Write-Error "readme-check.txt: emergency stop steps appear $stopCount times (expected 1)"
+    exit 1
+}
+if ($content -match "--- SAFETY ---\r?\n([\s\S]*?)\r?\n--- EMERGENCY STOP ---") {
+    if ($Matches[1] -match [regex]::Escape($stopStep)) {
+        Write-Error "readme-check.txt: SAFETY section must not include emergency-stop steps"
+        exit 1
+    }
+}
+
 Write-Host "step5-readme OK"
