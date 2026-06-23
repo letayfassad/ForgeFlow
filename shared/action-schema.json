@@ -1,0 +1,140 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://forgeflow.local/schemas/action-sequence.json",
+  "title": "ForgeFlow Action Sequence",
+  "description": "Structured desktop automation actions shared between web dashboard and Python runner",
+  "type": "object",
+  "required": ["version", "actions"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "name": { "type": "string" },
+    "description": { "type": "string" },
+    "actions": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/action" }
+    }
+  },
+  "definitions": {
+    "action": {
+      "oneOf": [
+        { "$ref": "#/definitions/move_mouse" },
+        { "$ref": "#/definitions/click" },
+        { "$ref": "#/definitions/double_click" },
+        { "$ref": "#/definitions/right_click" },
+        { "$ref": "#/definitions/type_text" },
+        { "$ref": "#/definitions/press_key" },
+        { "$ref": "#/definitions/hotkey" },
+        { "$ref": "#/definitions/wait" },
+        { "$ref": "#/definitions/open_application" },
+        { "$ref": "#/definitions/scroll" }
+      ]
+    },
+    "move_mouse": {
+      "type": "object",
+      "required": ["type", "x", "y"],
+      "properties": {
+        "type": { "const": "move_mouse" },
+        "x": { "type": "number", "minimum": 0 },
+        "y": { "type": "number", "minimum": 0 },
+        "duration": { "type": "number", "minimum": 0.05, "maximum": 30, "default": 0.5 },
+        "label": { "type": "string" }
+      }
+    },
+    "click": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "const": "click" },
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "button": { "enum": ["left", "right", "middle"], "default": "left" },
+        "label": { "type": "string" }
+      }
+    },
+    "double_click": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "const": "double_click" },
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "label": { "type": "string" }
+      }
+    },
+    "right_click": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "const": "right_click" },
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "label": { "type": "string" }
+      }
+    },
+    "type_text": {
+      "type": "object",
+      "required": ["type", "text"],
+      "properties": {
+        "type": { "const": "type_text" },
+        "text": { "type": "string" },
+        "interval": { "type": "number", "minimum": 0.01, "maximum": 2, "default": 0.05 },
+        "label": { "type": "string" }
+      }
+    },
+    "press_key": {
+      "type": "object",
+      "required": ["type", "key"],
+      "properties": {
+        "type": { "const": "press_key" },
+        "key": { "type": "string" },
+        "label": { "type": "string" }
+      }
+    },
+    "hotkey": {
+      "type": "object",
+      "required": ["type", "keys"],
+      "properties": {
+        "type": { "const": "hotkey" },
+        "keys": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 2
+        },
+        "label": { "type": "string" }
+      }
+    },
+    "wait": {
+      "type": "object",
+      "required": ["type", "seconds"],
+      "properties": {
+        "type": { "const": "wait" },
+        "seconds": { "type": "number", "minimum": 0.1, "maximum": 300 },
+        "label": { "type": "string" }
+      }
+    },
+    "open_application": {
+      "type": "object",
+      "required": ["type", "target"],
+      "properties": {
+        "type": { "const": "open_application" },
+        "target": { "type": "string" },
+        "label": { "type": "string" }
+      }
+    },
+    "scroll": {
+      "type": "object",
+      "required": ["type", "amount"],
+      "properties": {
+        "type": { "const": "scroll" },
+        "amount": { "type": "integer" },
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "label": { "type": "string" }
+      }
+    }
+  }
+}
