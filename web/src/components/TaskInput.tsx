@@ -21,8 +21,13 @@ export function TaskInput() {
     setIsPlanning(true);
     setPlanningError(null);
     try {
-      const sequence = await planActions(taskDescription);
-      setCurrentSequence(sequence);
+      const { sequence, source } = await planActions(taskDescription);
+      setCurrentSequence({
+        ...sequence,
+        description: sequence.description
+          ? `${sequence.description} (planner: ${source})`
+          : `Generated via ${source} planner`,
+      });
     } catch (err) {
       setPlanningError(err instanceof Error ? err.message : 'Planning failed');
     } finally {

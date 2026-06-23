@@ -1,35 +1,18 @@
-"""Desktop action executor using pyautogui, pynput, keyboard, and mouse."""
+"""Desktop action executor — dispatches to handler registry."""
 
 from __future__ import annotations
 
 import logging
-import os
-import subprocess
 import time
 from dataclasses import dataclass, field
 from typing import Callable
 
-import keyboard
-import mouse
 import pyautogui
 from pynput.keyboard import Controller as KeyboardController
 from pynput.mouse import Controller as MouseController
 
-from .schema import (
-    ActionSequence,
-    ClickAction,
-    DoubleClickAction,
-    ForgeAction,
-    HotkeyAction,
-    MoveMouseAction,
-    OpenApplicationAction,
-    PressKeyAction,
-    RightClickAction,
-    ScrollAction,
-    TypeTextAction,
-    WaitAction,
-    validate_sequence,
-)
+from .handlers import HandlerContext, execute_action, library_for
+from .schema import ActionSequence, ForgeAction, validate_sequence
 
 logger = logging.getLogger(__name__)
 
@@ -61,9 +44,13 @@ class ActionExecutor:
         self._stop_requested = False
         self._on_progress = on_progress
         self._dry_run = dry_run
-        self._pyautogui = pyautogui
-        self._mouse = _mouse_controller
-        self._keyboard = _keyboard_controller
+        self._ctx = HandlerContext(
+            dry_run=dry_run,
+            stop_requested=lambda: self._stop_requested,
+            pyautogui=pyautogui,
+            mouse_ctrl=_mouse_controller,
+            keyboard_ctrl=_keyboard_controller,
+        )
 
     def request_stop(self) -> None:
         self._stop_requested = True
@@ -80,8 +67,8 @@ class ActionExecutor:
         timing_log: list[dict] = []
 
         if not self._dry_run:
-            pos = self._pyautogui.position()
-            logger.info("pyautogui active, cursor at %s, FAILSAFE=%s", pos, self._pyautogui.FAILSAFE)
+            pos = pyautogui.position()
+            logger.info("pyautogui active, cursor at %s, FAILSAFE=%s", pos, pyautogui.FAILSAFE)
 
         for i, action in enumerate(sequence.actions):
             if self._stop_requested:
@@ -100,7 +87,7 @@ class ActionExecutor:
 
             start = time.perf_counter()
             try:
-                self._execute_action(action)
+                used_library = execute_action(action, self._ctx)
             except Exception as exc:
                 logger.exception("Action failed: %s", action.type)
                 return ExecutionResult(
@@ -126,7 +113,7 @@ class ActionExecutor:
                 "step": i + 1,
                 "type": action.type,
                 "elapsed": elapsed,
-                "library": self._library_for(action),
+                "library": used_library or library_for(action),
             })
 
         return ExecutionResult(
@@ -138,127 +125,4 @@ class ActionExecutor:
 
     @staticmethod
     def _library_for(action: ForgeAction) -> str:
-        if isinstance(action, MoveMouseAction):
-            return "pynput"
-        if isinstance(action, TypeTextAction):
-            return "pynput"
-        if isinstance(action, (PressKeyAction, HotkeyAction)):
-            return "keyboard"
-        if isinstance(action, ScrollAction):
-            return "mouse"
-        if isinstance(action, ClickAction):
-            return "pyautogui" if action.x is not None else "mouse"
-        if isinstance(action, DoubleClickAction):
-            return "pyautogui" if action.x is not None else "mouse"
-        if isinstance(action, RightClickAction):
-            return "pyautogui" if action.x is not None else "mouse"
-        return "stdlib"
-
-    def _log_action(self, action: ForgeAction, library: str, **params: object) -> None:
-        logger.info(
-            "forgeflow.execute type=%s library=%s params=%s",
-            action.type,
-            library,
-            params,
-        )
-
-    def _execute_action(self, action: ForgeAction) -> None:
-        library = self._library_for(action)
-
-        if self._dry_run:
-            logger.info("[DRY RUN] %s via %s", action.type, library)
-            time.sleep(0.01)
-            return
-
-        if isinstance(action, MoveMouseAction):
-            self._log_action(action, library, x=action.x, y=action.y, duration=action.duration)
-            self._move_mouse(action.x, action.y, action.duration)
-        elif isinstance(action, ClickAction):
-            if action.x is not None and action.y is not None:
-                self._log_action(action, library, x=action.x, y=action.y, button=action.button)
-                self._pyautogui.click(action.x, action.y, button=action.button)
-            else:
-                self._log_action(action, library, button=action.button)
-                button = action.button if action.button != "middle" else "left"
-                mouse.click(button=button)
-        elif isinstance(action, DoubleClickAction):
-            if action.x is not None and action.y is not None:
-                self._log_action(action, library, x=action.x, y=action.y)
-                self._pyautogui.doubleClick(action.x, action.y)
-            else:
-                self._log_action(action, library)
-                mouse.double_click()
-        elif isinstance(action, RightClickAction):
-            if action.x is not None and action.y is not None:
-                self._log_action(action, library, x=action.x, y=action.y)
-                self._pyautogui.rightClick(action.x, action.y)
-            else:
-                self._log_action(action, library)
-                mouse.right_click()
-        elif isinstance(action, TypeTextAction):
-            self._log_action(action, library, text=action.text, interval=action.interval)
-            self._type_text(action.text, action.interval)
-        elif isinstance(action, PressKeyAction):
-            self._log_action(action, library, key=action.key)
-            keyboard.press_and_release(action.key)
-        elif isinstance(action, HotkeyAction):
-            combo = "+".join(action.keys)
-            self._log_action(action, library, keys=combo)
-            keyboard.send(combo)
-        elif isinstance(action, WaitAction):
-            self._log_action(action, library, seconds=action.seconds)
-            self._interruptible_sleep(action.seconds)
-        elif isinstance(action, OpenApplicationAction):
-            self._log_action(action, library, target=action.target)
-            self._open_application(action.target)
-        elif isinstance(action, ScrollAction):
-            self._log_action(action, library, amount=action.amount)
-            mouse.wheel(action.amount)
-
-    def _interruptible_sleep(self, seconds: float) -> None:
-        """Sleep in small chunks so emergency stop can interrupt long waits."""
-        chunk = 0.05
-        remaining = seconds
-        while remaining > 0:
-            if self._stop_requested:
-                return
-            time.sleep(min(chunk, remaining))
-            remaining -= chunk
-
-    def _move_mouse(self, x: float, y: float, duration: float) -> None:
-        """Smooth visible mouse movement via pynput over the requested duration."""
-        start_x, start_y = self._mouse.position
-        steps = max(int(duration / 0.02), 1)
-        step_delay = duration / steps
-        for i in range(1, steps + 1):
-            if self._stop_requested:
-                return
-            t = i / steps
-            nx = int(start_x + (x - start_x) * t)
-            ny = int(start_y + (y - start_y) * t)
-            self._mouse.position = (nx, ny)
-            time.sleep(step_delay)
-
-    def _type_text(self, text: str, interval: float) -> None:
-        """Type text character-by-character via pynput with per-char interval."""
-        for char in text:
-            if self._stop_requested:
-                return
-            self._keyboard.type(char)
-            time.sleep(interval)
-
-    def _open_application(self, target: str) -> None:
-        target_lower = target.lower()
-        app_map = {
-            "notepad": "notepad.exe",
-            "calculator": "calc.exe",
-            "calc": "calc.exe",
-            "explorer": "explorer.exe",
-            "cmd": "cmd.exe",
-            "paint": "mspaint.exe",
-        }
-        executable = app_map.get(target_lower, target)
-        if os.path.isfile(executable) or executable.endswith(".exe"):
-            subprocess.Popen([executable], shell=True)
-        else:
-            os.startfile(executable)  # type: ignore[attr-defined]
+        return library_for(action)

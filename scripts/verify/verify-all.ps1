@@ -6,6 +6,7 @@ $ErrorActionPreference = "Stop"
 $VerifyDir = $PSScriptRoot
 
 $steps = @(
+    "step0-deliverable.ps1",
     "step1-schema.ps1",
     "step2-web-dashboard.ps1",
     "step3-runner.ps1",

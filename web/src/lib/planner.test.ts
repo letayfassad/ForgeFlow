@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildPlannerPrompt, planWithRules } from './planner';
+import { buildPlannerPrompt, planActions, planWithRules } from './planner';
 
 describe('planner', () => {
   it('builds a system prompt', () => {
@@ -13,5 +13,11 @@ describe('planner', () => {
     expect(seq.actions.length).toBeGreaterThan(0);
     expect(seq.actions.some((a) => a.type === 'open_application')).toBe(true);
     expect(seq.actions.some((a) => a.type === 'type_text')).toBe(true);
+  });
+
+  it('planActions falls back to local parser when no AI/Ollama available', async () => {
+    const result = await planActions('Open notepad and type hello');
+    expect(result.source).toBe('local');
+    expect(result.sequence.actions.length).toBeGreaterThan(0);
   });
 });

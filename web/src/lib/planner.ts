@@ -218,17 +218,61 @@ export function planWithRules(description: string): ActionSequence {
   });
 }
 
+export type PlannerSource = 'ai' | 'ollama' | 'local';
+
+export interface PlanResult {
+  sequence: ActionSequence;
+  source: PlannerSource;
+}
+
+/** Try a local Ollama instance (real LLM) before falling back to rule-based parser. */
+export async function planWithOllama(description: string): Promise<ActionSequence> {
+  const url = import.meta.env.VITE_OLLAMA_URL ?? 'http://localhost:11434/api/generate';
+  const model = import.meta.env.VITE_OLLAMA_MODEL ?? 'llama3.2';
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 3000);
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        prompt: buildPlannerPrompt(description),
+        stream: false,
+      }),
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      throw new Error(`Ollama planner failed (${response.status})`);
+    }
+    const data = await response.json();
+    const content = data.response as string | undefined;
+    if (!content) {
+      throw new Error('Empty response from Ollama planner');
+    }
+    return validateSequence(extractJsonFromText(content));
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export async function planActions(
   description: string,
   options: PlannerOptions = {},
-): Promise<ActionSequence> {
+): Promise<PlanResult> {
   const apiKey = options.apiKey ?? import.meta.env.VITE_AI_API_KEY;
   if (apiKey) {
     try {
-      return await planWithApi(description, options);
+      const sequence = await planWithApi(description, options);
+      return { sequence, source: 'ai' };
     } catch {
-      return planWithRules(description);
+      // fall through to Ollama / local
     }
   }
-  return planWithRules(description);
+  try {
+    const sequence = await planWithOllama(description);
+    return { sequence, source: 'ollama' };
+  } catch {
+    return { sequence: planWithRules(description), source: 'local' };
+  }
 }

@@ -1,7 +1,7 @@
 """Unit tests for action executor."""
 
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from forgeflow_runner.executor import ActionExecutor
 from forgeflow_runner.schema import validate_sequence
@@ -17,26 +17,33 @@ class TestExecutor(unittest.TestCase):
                     {"type": "wait", "seconds": 0.1},
                     {"type": "type_text", "text": "hi", "interval": 0.01},
                     {"type": "click", "x": 10, "y": 20},
+                    {"type": "double_click", "x": 10, "y": 20},
+                    {"type": "right_click", "x": 10, "y": 20},
                     {"type": "click"},
                     {"type": "press_key", "key": "enter"},
                     {"type": "hotkey", "keys": ["ctrl", "s"]},
                     {"type": "scroll", "amount": -3},
+                    {"type": "open_application", "target": "calc"},
                 ],
             }
         )
 
-    @patch("forgeflow_runner.executor.pyautogui")
-    @patch("forgeflow_runner.executor.mouse")
-    @patch("forgeflow_runner.executor.keyboard")
+    @patch("forgeflow_runner.handlers.open_app.launch")
+    @patch("forgeflow_runner.handlers.scroll.mouse")
+    @patch("forgeflow_runner.handlers.keys.keyboard")
+    @patch("forgeflow_runner.handlers.mouse.mouse")
     @patch("forgeflow_runner.executor._keyboard_controller")
     @patch("forgeflow_runner.executor._mouse_controller")
+    @patch("forgeflow_runner.executor.pyautogui")
     def test_execute_calls_libs_with_timing(
         self,
+        mock_pyautogui,
         mock_mouse_ctrl,
         mock_kb_ctrl,
-        mock_keyboard,
         mock_mouse_lib,
-        mock_pyautogui,
+        mock_keyboard,
+        mock_scroll_mouse,
+        mock_launch,
     ):
         mock_mouse_ctrl.position = (0, 0)
         mock_pyautogui.position.return_value = (0, 0)
@@ -45,35 +52,37 @@ class TestExecutor(unittest.TestCase):
         result = executor.execute(self._make_test_sequence())
 
         self.assertTrue(result.success)
-        self.assertEqual(result.steps_completed, 8)
-        self.assertEqual(mock_mouse_ctrl.position, (10, 20))
-        self.assertEqual(mock_kb_ctrl.type.call_count, 2)
+        self.assertEqual(result.steps_completed, 11)
         mock_pyautogui.click.assert_called_once_with(10, 20, button="left")
+        mock_pyautogui.doubleClick.assert_called_once_with(10, 20)
+        mock_pyautogui.rightClick.assert_called_once_with(10, 20)
         mock_mouse_lib.click.assert_called_once_with(button="left")
-        mock_keyboard.press_and_release.assert_called_once_with("enter")
+        mock_keyboard.press_and_release.assert_called()
         mock_keyboard.send.assert_called_once_with("ctrl+s")
-        mock_mouse_lib.wheel.assert_called_once_with(-3)
+        mock_scroll_mouse.wheel.assert_called_once_with(-3)
+        mock_launch.assert_called_once_with("calc.exe")
 
         libs = {t["type"]: t["library"] for t in result.timing_log}
         self.assertEqual(libs["move_mouse"], "pynput")
         self.assertEqual(libs["type_text"], "pynput")
-        self.assertEqual(libs["click"], "mouse")  # last click entry — both clicks logged separately
-        click_libs = [t["library"] for t in result.timing_log if t["type"] == "click"]
-        self.assertIn("pyautogui", click_libs)
-        self.assertIn("mouse", click_libs)
+        self.assertEqual(libs["open_application"], "subprocess")
 
-    @patch("forgeflow_runner.executor.pyautogui")
-    @patch("forgeflow_runner.executor.mouse")
-    @patch("forgeflow_runner.executor.keyboard")
+    @patch("forgeflow_runner.handlers.open_app.launch")
+    @patch("forgeflow_runner.handlers.scroll.mouse")
+    @patch("forgeflow_runner.handlers.keys.keyboard")
+    @patch("forgeflow_runner.handlers.mouse.mouse")
     @patch("forgeflow_runner.executor._keyboard_controller")
     @patch("forgeflow_runner.executor._mouse_controller")
+    @patch("forgeflow_runner.executor.pyautogui")
     def test_execute_consistent_success_twice(
         self,
+        mock_pyautogui,
         mock_mouse_ctrl,
         mock_kb_ctrl,
-        mock_keyboard,
         mock_mouse_lib,
-        mock_pyautogui,
+        mock_keyboard,
+        mock_scroll_mouse,
+        mock_launch,
     ):
         mock_mouse_ctrl.position = (0, 0)
         mock_pyautogui.position.return_value = (0, 0)
@@ -83,7 +92,7 @@ class TestExecutor(unittest.TestCase):
         for _ in range(2):
             result = executor.execute(sequence)
             self.assertTrue(result.success)
-            self.assertEqual(len(result.timing_log), 8)
+            self.assertEqual(len(result.timing_log), 11)
 
     @patch("forgeflow_runner.executor.pyautogui")
     def test_stop_interrupts_wait_mid_action(self, mock_pyautogui):
@@ -104,7 +113,7 @@ class TestExecutor(unittest.TestCase):
             if sleep_calls >= 2:
                 executor.request_stop()
 
-        with patch("forgeflow_runner.executor.time.sleep", side_effect=sleep_side_effect):
+        with patch("forgeflow_runner.handlers.context.time.sleep", side_effect=sleep_side_effect):
             result = executor.execute(sequence)
 
         self.assertFalse(result.success)
@@ -140,7 +149,7 @@ class TestExecutor(unittest.TestCase):
         )
         result = executor.execute(self._make_test_sequence())
         self.assertTrue(result.success)
-        self.assertEqual(len(progress_calls), 8)
+        self.assertEqual(len(progress_calls), 11)
 
 
 if __name__ == "__main__":

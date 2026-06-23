@@ -44,18 +44,20 @@ class TestWebSocketIntegration(unittest.IsolatedAsyncioTestCase):
             pass
         self.hotkey_patcher.stop()
 
-    @patch("forgeflow_runner.executor.pyautogui")
-    @patch("forgeflow_runner.executor.keyboard")
-    @patch("forgeflow_runner.executor.mouse")
+    @patch("forgeflow_runner.handlers.open_app.launch")
+    @patch("forgeflow_runner.handlers.keys.keyboard")
+    @patch("forgeflow_runner.handlers.mouse.mouse")
     @patch("forgeflow_runner.executor._mouse_controller")
     @patch("forgeflow_runner.executor._keyboard_controller")
+    @patch("forgeflow_runner.executor.pyautogui")
     async def test_ws_execute_roundtrip(
         self,
+        mock_pyautogui,
         mock_kb_ctrl,
         mock_mouse_ctrl,
         mock_mouse_lib,
         mock_keyboard_lib,
-        mock_pyautogui,
+        _mock_launch,
     ):
         mock_mouse_ctrl.position = (0, 0)
         mock_pyautogui.position.return_value = (0, 0)
@@ -87,18 +89,20 @@ class TestWebSocketIntegration(unittest.IsolatedAsyncioTestCase):
         mock_kb_ctrl.type.assert_called()
         mock_pyautogui.click.assert_called_once_with(10, 20, button="left")
 
-    @patch("forgeflow_runner.executor.pyautogui")
-    @patch("forgeflow_runner.executor.keyboard")
-    @patch("forgeflow_runner.executor.mouse")
+    @patch("forgeflow_runner.handlers.open_app.launch")
+    @patch("forgeflow_runner.handlers.keys.keyboard")
+    @patch("forgeflow_runner.handlers.mouse.mouse")
     @patch("forgeflow_runner.executor._mouse_controller")
     @patch("forgeflow_runner.executor._keyboard_controller")
+    @patch("forgeflow_runner.executor.pyautogui")
     async def test_ws_execute_consistent_twice(
         self,
+        mock_pyautogui,
         mock_kb_ctrl,
         mock_mouse_ctrl,
         mock_mouse_lib,
         mock_keyboard_lib,
-        mock_pyautogui,
+        _mock_launch,
     ):
         mock_mouse_ctrl.position = (0, 0)
         mock_pyautogui.position.return_value = (0, 0)

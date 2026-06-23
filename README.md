@@ -30,9 +30,13 @@ cd ForgeFlow/runner
 pip install -r requirements.txt
 ```
 
-### 3. (Optional) Configure AI planner API
+### 3. Configure the AI planner (pick one)
 
-For AI-powered planning (instead of rule-based fallback), create `web/.env.local`:
+ForgeFlow tries planners in this order: **cloud AI** → **local Ollama** → **built-in parser**.
+
+**Option A — Cloud AI (xAI/Grok or compatible API)**
+
+Create `web/.env.local`:
 
 ```env
 VITE_AI_API_KEY=your-api-key
@@ -40,7 +44,16 @@ VITE_AI_API_URL=https://api.x.ai/v1/chat/completions
 VITE_AI_MODEL=grok-3-mini
 ```
 
-Without an API key, ForgeFlow uses a built-in rule-based planner for common tasks.
+**Option B — Local Ollama (free, runs on your machine)**
+
+```env
+VITE_OLLAMA_URL=http://localhost:11434/api/generate
+VITE_OLLAMA_MODEL=llama3.2
+```
+
+**Option C — No configuration**
+
+ForgeFlow uses a built-in natural-language parser for common Windows tasks (open app, type, click, wait, etc.).
 
 ## Running ForgeFlow
 

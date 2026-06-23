@@ -120,7 +120,7 @@ describe('RunnerClient against live python main.py', () => {
 
     expect(messages).toContain('progress');
     expect(messages).toContain('complete');
-    expect(TEST_SEQUENCE.actions.length).toBe(6);
+    expect(TEST_SEQUENCE.actions.length).toBe(11);
 
     unsub();
     client.disconnect();

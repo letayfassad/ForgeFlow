@@ -1,13 +1,18 @@
 {
   "version": "1.0",
   "name": "Verification Sequence",
-  "description": "Canonical verification sequence exercising pynput, pyautogui, keyboard, and mouse",
+  "description": "Canonical verification sequence exercising all 10 v1 action types",
   "actions": [
-    { "type": "move_mouse", "x": 10, "y": 10, "duration": 0.05, "label": "Move (pynput)" },
+    { "type": "move_mouse", "x": 500, "y": 400, "duration": 0.3, "label": "Move (pynput)" },
     { "type": "wait", "seconds": 0.05, "label": "Wait 0.05s" },
     { "type": "type_text", "text": "x", "interval": 0.01, "label": "Type (pynput)" },
-    { "type": "click", "x": 10, "y": 10, "label": "Click coords (pyautogui)" },
+    { "type": "click", "x": 500, "y": 400, "label": "Click coords (pyautogui)" },
+    { "type": "double_click", "x": 500, "y": 400, "label": "Double-click (pyautogui)" },
+    { "type": "right_click", "x": 500, "y": 400, "label": "Right-click (pyautogui)" },
     { "type": "press_key", "key": "escape", "label": "Press escape (keyboard)" },
-    { "type": "scroll", "amount": 1, "label": "Scroll (mouse)" }
+    { "type": "hotkey", "keys": ["win", "d"], "label": "Hotkey win+d (keyboard)" },
+    { "type": "press_key", "key": "escape", "label": "Press escape after hotkey" },
+    { "type": "scroll", "amount": 1, "label": "Scroll (mouse)" },
+    { "type": "open_application", "target": "calc", "label": "Open calc (subprocess)" }
   ]
 }

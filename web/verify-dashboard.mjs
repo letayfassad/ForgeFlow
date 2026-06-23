@@ -34,6 +34,15 @@ const browser = await chromium.launch();
 const page = await browser.newPage();
 
 await page.addInitScript(() => {
+  const nativeFetch = window.fetch.bind(window);
+  window.fetch = async (input, init) => {
+    const url = String(input);
+    if (url.includes('11434') || url.includes('localhost:8765')) {
+      throw new TypeError('offline in verify harness');
+    }
+    return nativeFetch(input, init);
+  };
+
   class MockWebSocket {
     static CONNECTING = 0;
     static OPEN = 1;
@@ -62,7 +71,12 @@ await page.addInitScript(() => {
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
 page.on('console', (msg) => {
-  if (msg.type() === 'error') errors.push(msg.text());
+  if (msg.type() !== 'error') return;
+  const text = msg.text();
+  if (text.includes('ERR_CONNECTION_REFUSED') && (text.includes('8765') || text.includes('11434'))) {
+    return;
+  }
+  errors.push(text);
 });
 
 await page.goto(`http://localhost:${PORT}`);

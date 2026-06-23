@@ -115,14 +115,25 @@ async def main_async() -> int:
             if "forgeflow.execute" in line or "pyautogui active" in line:
                 print(line.rstrip())
 
-        required_libs = ("pynput", "pyautogui", "keyboard", "mouse")
+        required_libs = ("pynput", "pyautogui", "keyboard", "mouse", "subprocess")
+        required_types = (
+            "move_mouse", "wait", "type_text", "click", "double_click", "right_click",
+            "press_key", "hotkey", "scroll", "open_application",
+        )
         log_text = "".join(server_lines)
         for lib in required_libs:
             if f"library={lib}" not in log_text:
                 print(f"ERROR: missing library={lib} in executor logs")
                 return 1
+        for action_type in required_types:
+            if f"type={action_type}" not in log_text:
+                print(f"ERROR: missing type={action_type} in executor logs")
+                return 1
         if "'seconds': 0.05" not in log_text:
             print("ERROR: wait seconds=0.05 not honored in logs")
+            return 1
+        if "'x': 500" not in log_text:
+            print("ERROR: move_mouse x=500 not honored in logs")
             return 1
 
         return 0 if all_ok else 1
