@@ -25,7 +25,7 @@ foreach ($needle in @(
     "library=pyautogui",
     "library=keyboard",
     "library=mouse",
-    "'seconds': 0.1",
+    "'seconds': 0.05",
     "RunnerClient",
     "All runs successful: True"
 )) {

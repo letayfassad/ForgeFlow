@@ -19,7 +19,7 @@ Supported action types:
 - type_text: { type, text, interval (0.01-2 seconds per char), label? }
 - press_key: { type, key, label? }
 - hotkey: { type, keys: string[], label? }
-- wait: { type, seconds (0.1-300), label? }
+- wait: { type, seconds (0.05-300), label? }
 - open_application: { type, target (app name or path), label? }
 - scroll: { type, amount (positive=up, negative=down), x?, y?, label? }
 

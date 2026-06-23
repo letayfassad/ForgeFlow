@@ -110,6 +110,17 @@ class ActionExecutor:
                     error=str(exc),
                     timing_log=timing_log,
                 )
+
+            if self._stop_requested:
+                return ExecutionResult(
+                    success=False,
+                    steps_completed=i + 1,
+                    total_steps=total,
+                    stopped=True,
+                    error="Stopped by user",
+                    timing_log=timing_log,
+                )
+
             elapsed = time.perf_counter() - start
             timing_log.append({
                 "step": i + 1,
@@ -196,13 +207,23 @@ class ActionExecutor:
             keyboard.send(combo)
         elif isinstance(action, WaitAction):
             self._log_action(action, library, seconds=action.seconds)
-            time.sleep(action.seconds)
+            self._interruptible_sleep(action.seconds)
         elif isinstance(action, OpenApplicationAction):
             self._log_action(action, library, target=action.target)
             self._open_application(action.target)
         elif isinstance(action, ScrollAction):
             self._log_action(action, library, amount=action.amount)
             mouse.wheel(action.amount)
+
+    def _interruptible_sleep(self, seconds: float) -> None:
+        """Sleep in small chunks so emergency stop can interrupt long waits."""
+        chunk = 0.05
+        remaining = seconds
+        while remaining > 0:
+            if self._stop_requested:
+                return
+            time.sleep(min(chunk, remaining))
+            remaining -= chunk
 
     def _move_mouse(self, x: float, y: float, duration: float) -> None:
         """Smooth visible mouse movement via pynput over the requested duration."""

@@ -34,7 +34,7 @@ function Get-SubSection([string]$Heading) {
     if ($start -lt 0) { return "" }
     $body = @()
     for ($j = $start; $j -lt $lines.Count; $j++) {
-        if ($lines[$j] -match "^### ") { break }
+        if ($lines[$j] -match "^#{2,3} ") { break }
         $body += $lines[$j]
     }
     return ($body -join "`n").Trim()

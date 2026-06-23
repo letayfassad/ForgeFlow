@@ -121,8 +121,8 @@ async def main_async() -> int:
             if f"library={lib}" not in log_text:
                 print(f"ERROR: missing library={lib} in executor logs")
                 return 1
-        if "'seconds': 0.1" not in log_text:
-            print("ERROR: wait seconds=0.1 not honored in logs")
+        if "'seconds': 0.05" not in log_text:
+            print("ERROR: wait seconds=0.05 not honored in logs")
             return 1
 
         return 0 if all_ok else 1

@@ -73,6 +73,17 @@ class TestSchema(unittest.TestCase):
         self.assertEqual(move.x, 10)
         self.assertEqual(move.duration, 1.0)
 
+    def test_wait_honors_minimum_seconds(self):
+        seq = validate_sequence(
+            {
+                "version": "1.0",
+                "actions": [{"type": "wait", "seconds": 0.05}],
+            }
+        )
+        wait = seq.actions[0]
+        assert isinstance(wait, WaitAction)
+        self.assertEqual(wait.seconds, 0.05)
+
     def test_safety_clamping(self):
         seq = validate_sequence(
             {

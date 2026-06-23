@@ -39,7 +39,7 @@ export function normalizeAction(action: ForgeAction): ForgeAction {
     case 'wait':
       return {
         ...action,
-        seconds: clamp(action.seconds, 0.1, SAFETY_LIMITS.maxWaitSeconds),
+        seconds: clamp(action.seconds, SAFETY_LIMITS.minWaitSeconds, SAFETY_LIMITS.maxWaitSeconds),
       };
     case 'click':
       return { ...action, button: action.button ?? 'left' };

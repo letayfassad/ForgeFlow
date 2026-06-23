@@ -112,7 +112,7 @@
       "required": ["type", "seconds"],
       "properties": {
         "type": { "const": "wait" },
-        "seconds": { "type": "number", "minimum": 0.1, "maximum": 300 },
+        "seconds": { "type": "number", "minimum": 0.05, "maximum": 300 },
         "label": { "type": "string" }
       }
     },

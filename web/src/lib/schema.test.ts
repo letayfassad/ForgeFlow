@@ -44,6 +44,13 @@ describe('schema', () => {
     }
   });
 
+  it('honors minimum wait seconds', () => {
+    const action = validateAction({ type: 'wait', seconds: 0.05 });
+    if (action.type === 'wait') {
+      expect(action.seconds).toBe(0.05);
+    }
+  });
+
   it('clamps unsafe values', () => {
     const action = validateAction({ type: 'move_mouse', x: 0, y: 0, duration: 999 });
     if (action.type === 'move_mouse') {

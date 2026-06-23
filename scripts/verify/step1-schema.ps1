@@ -36,6 +36,20 @@ python -m unittest tests.test_schema -v 2>&1 | Add-Content $out
 if ($LASTEXITCODE -ne 0) { Pop-Location; exit 1 }
 Pop-Location
 
+$changedFiles = Get-Content (Join-Path $ScratchDir "CHANGED_FILES.txt") -Raw
+foreach ($needle in @("runner/main.py", "web/src/App.tsx", "shared/action-schema.json")) {
+    if ($changedFiles -notmatch [regex]::Escape($needle)) {
+        Write-Error "CHANGED_FILES.txt missing ForgeFlow path: $needle"
+        exit 1
+    }
+}
+foreach ($bad in @("System32", "catroot2")) {
+    if ($changedFiles -match [regex]::Escape($bad)) {
+        Write-Error "CHANGED_FILES.txt polluted with: $bad"
+        exit 1
+    }
+}
+
 $content = Get-Content $out -Raw
 foreach ($needle in @("move_mouse", "type_text", "scroll", "OK", "passed")) {
     if ($content -notmatch [regex]::Escape($needle)) {

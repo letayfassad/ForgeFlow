@@ -129,5 +129,6 @@ export const SAFETY_LIMITS = {
   minMouseDuration: 0.05,
   maxTypeInterval: 2,
   minTypeInterval: 0.01,
+  minWaitSeconds: 0.05,
   maxWaitSeconds: 300,
 } as const;

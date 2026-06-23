@@ -85,6 +85,32 @@ class TestExecutor(unittest.TestCase):
             self.assertTrue(result.success)
             self.assertEqual(len(result.timing_log), 8)
 
+    @patch("forgeflow_runner.executor.pyautogui")
+    def test_stop_interrupts_wait_mid_action(self, mock_pyautogui):
+        mock_pyautogui.position.return_value = (0, 0)
+        executor = ActionExecutor(dry_run=False)
+        sequence = validate_sequence(
+            {
+                "version": "1.0",
+                "actions": [{"type": "wait", "seconds": 1.0}],
+            }
+        )
+
+        sleep_calls = 0
+
+        def sleep_side_effect(seconds):
+            nonlocal sleep_calls
+            sleep_calls += 1
+            if sleep_calls >= 2:
+                executor.request_stop()
+
+        with patch("forgeflow_runner.executor.time.sleep", side_effect=sleep_side_effect):
+            result = executor.execute(sequence)
+
+        self.assertFalse(result.success)
+        self.assertTrue(result.stopped)
+        self.assertEqual(result.steps_completed, 1)
+
     def test_stop_requested_mid_execution(self):
         executor = ActionExecutor(dry_run=True)
         long_sequence = validate_sequence(

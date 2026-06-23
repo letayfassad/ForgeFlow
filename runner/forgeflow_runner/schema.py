@@ -13,6 +13,7 @@ SAFETY_LIMITS = {
     "min_mouse_duration": 0.05,
     "max_type_interval": 2.0,
     "min_type_interval": 0.01,
+    "min_wait_seconds": 0.05,
     "max_wait_seconds": 300.0,
 }
 
@@ -140,7 +141,11 @@ def normalize_action(action: ForgeAction) -> ForgeAction:
             SAFETY_LIMITS["max_type_interval"],
         )
     elif isinstance(action, WaitAction):
-        action.seconds = _clamp(action.seconds, 0.1, SAFETY_LIMITS["max_wait_seconds"])
+        action.seconds = _clamp(
+            action.seconds,
+            SAFETY_LIMITS["min_wait_seconds"],
+            SAFETY_LIMITS["max_wait_seconds"],
+        )
     return action
 
 
