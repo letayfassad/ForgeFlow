@@ -79,6 +79,10 @@ class ActionExecutor:
         total = len(sequence.actions)
         timing_log: list[dict] = []
 
+        if not self._dry_run:
+            pos = self._pyautogui.position()
+            logger.info("pyautogui active, cursor at %s, FAILSAFE=%s", pos, self._pyautogui.FAILSAFE)
+
         for i, action in enumerate(sequence.actions):
             if self._stop_requested:
                 return ExecutionResult(
@@ -131,44 +135,73 @@ class ActionExecutor:
             return "keyboard"
         if isinstance(action, ScrollAction):
             return "mouse"
-        if isinstance(action, (ClickAction, DoubleClickAction, RightClickAction)):
-            return "pyautogui"
+        if isinstance(action, ClickAction):
+            return "pyautogui" if action.x is not None else "mouse"
+        if isinstance(action, DoubleClickAction):
+            return "pyautogui" if action.x is not None else "mouse"
+        if isinstance(action, RightClickAction):
+            return "pyautogui" if action.x is not None else "mouse"
         return "stdlib"
 
+    def _log_action(self, action: ForgeAction, library: str, **params: object) -> None:
+        logger.info(
+            "forgeflow.execute type=%s library=%s params=%s",
+            action.type,
+            library,
+            params,
+        )
+
     def _execute_action(self, action: ForgeAction) -> None:
+        library = self._library_for(action)
+
         if self._dry_run:
-            logger.info("[DRY RUN] %s via %s", action.type, self._library_for(action))
+            logger.info("[DRY RUN] %s via %s", action.type, library)
             time.sleep(0.01)
             return
 
         if isinstance(action, MoveMouseAction):
+            self._log_action(action, library, x=action.x, y=action.y, duration=action.duration)
             self._move_mouse(action.x, action.y, action.duration)
         elif isinstance(action, ClickAction):
             if action.x is not None and action.y is not None:
+                self._log_action(action, library, x=action.x, y=action.y, button=action.button)
                 self._pyautogui.click(action.x, action.y, button=action.button)
             else:
-                self._pyautogui.click(button=action.button)
+                self._log_action(action, library, button=action.button)
+                button = action.button if action.button != "middle" else "left"
+                mouse.click(button=button)
         elif isinstance(action, DoubleClickAction):
             if action.x is not None and action.y is not None:
+                self._log_action(action, library, x=action.x, y=action.y)
                 self._pyautogui.doubleClick(action.x, action.y)
             else:
-                self._pyautogui.doubleClick()
+                self._log_action(action, library)
+                mouse.double_click()
         elif isinstance(action, RightClickAction):
             if action.x is not None and action.y is not None:
+                self._log_action(action, library, x=action.x, y=action.y)
                 self._pyautogui.rightClick(action.x, action.y)
             else:
-                self._pyautogui.rightClick()
+                self._log_action(action, library)
+                mouse.right_click()
         elif isinstance(action, TypeTextAction):
+            self._log_action(action, library, text=action.text, interval=action.interval)
             self._type_text(action.text, action.interval)
         elif isinstance(action, PressKeyAction):
+            self._log_action(action, library, key=action.key)
             keyboard.press_and_release(action.key)
         elif isinstance(action, HotkeyAction):
-            keyboard.send("+".join(action.keys))
+            combo = "+".join(action.keys)
+            self._log_action(action, library, keys=combo)
+            keyboard.send(combo)
         elif isinstance(action, WaitAction):
+            self._log_action(action, library, seconds=action.seconds)
             time.sleep(action.seconds)
         elif isinstance(action, OpenApplicationAction):
+            self._log_action(action, library, target=action.target)
             self._open_application(action.target)
         elif isinstance(action, ScrollAction):
+            self._log_action(action, library, amount=action.amount)
             mouse.wheel(action.amount)
 
     def _move_mouse(self, x: float, y: float, duration: float) -> None:

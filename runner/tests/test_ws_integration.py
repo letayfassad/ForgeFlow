@@ -18,7 +18,7 @@ TEST_SEQUENCE = {
         {"type": "move_mouse", "x": 10, "y": 20, "duration": 0.05},
         {"type": "wait", "seconds": 0.05},
         {"type": "type_text", "text": "x", "interval": 0.01},
-        {"type": "click"},
+        {"type": "click", "x": 10, "y": 20},
     ],
 }
 
@@ -58,6 +58,7 @@ class TestWebSocketIntegration(unittest.IsolatedAsyncioTestCase):
         mock_pyautogui,
     ):
         mock_mouse_ctrl.position = (0, 0)
+        mock_pyautogui.position.return_value = (0, 0)
         messages: list[dict] = []
 
         async with websockets.connect(f"ws://localhost:{TEST_PORT}") as ws:
@@ -84,7 +85,7 @@ class TestWebSocketIntegration(unittest.IsolatedAsyncioTestCase):
 
         mock_mouse_ctrl.position  # pynput used for move
         mock_kb_ctrl.type.assert_called()
-        mock_pyautogui.click.assert_called_once()
+        mock_pyautogui.click.assert_called_once_with(10, 20, button="left")
 
     @patch("forgeflow_runner.executor.pyautogui")
     @patch("forgeflow_runner.executor.keyboard")
@@ -100,6 +101,7 @@ class TestWebSocketIntegration(unittest.IsolatedAsyncioTestCase):
         mock_pyautogui,
     ):
         mock_mouse_ctrl.position = (0, 0)
+        mock_pyautogui.position.return_value = (0, 0)
 
         for run in range(2):
             async with websockets.connect(f"ws://localhost:{TEST_PORT}") as ws:

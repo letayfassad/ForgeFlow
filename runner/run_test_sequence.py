@@ -1,15 +1,19 @@
-"""Verification entry: launches real RunnerServer WS entry and runs client roundtrip twice."""
+"""Verification entry: launches `python main.py` and runs unpatched WS client roundtrips."""
 
 from __future__ import annotations
 
 import asyncio
 import json
+import socket
+import subprocess
 import sys
-from unittest.mock import MagicMock, patch
+import threading
+import time
+from pathlib import Path
 
 import websockets
 
-from forgeflow_runner.server import RunnerServer
+RUNNER_DIR = Path(__file__).parent
 
 TEST_SEQUENCE = {
     "version": "1.0",
@@ -18,23 +22,57 @@ TEST_SEQUENCE = {
         {"type": "move_mouse", "x": 10, "y": 10, "duration": 0.05},
         {"type": "wait", "seconds": 0.05},
         {"type": "type_text", "text": "x", "interval": 0.01},
-        {"type": "click"},
+        {"type": "click", "x": 10, "y": 10},
     ],
 }
 
 
 def _free_port() -> int:
-    import socket
-
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.bind(("127.0.0.1", 0))
         return sock.getsockname()[1]
 
 
-async def run_client_roundtrip(run_number: int, port: int) -> dict:
+def _launch_main_py(port: int) -> tuple[subprocess.Popen[str], list[str]]:
+    """Start the real main.py entry point as a subprocess."""
+    cmd = [sys.executable, "main.py", "--host", "127.0.0.1", "--port", str(port)]
+    print(f"Launching: {' '.join(cmd)}")
+    proc = subprocess.Popen(
+        cmd,
+        cwd=RUNNER_DIR,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1,
+    )
+    lines: list[str] = []
+
+    def _reader() -> None:
+        assert proc.stdout is not None
+        for line in proc.stdout:
+            lines.append(line)
+            sys.stdout.write(f"[main.py] {line}")
+
+    thread = threading.Thread(target=_reader, daemon=True)
+    thread.start()
+    return proc, lines
+
+
+async def _wait_for_server(port: int, timeout: float = 15.0) -> bool:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            async with websockets.connect(f"ws://127.0.0.1:{port}", open_timeout=1):
+                return True
+        except Exception:
+            await asyncio.sleep(0.1)
+    return False
+
+
+async def _run_client_roundtrip(run_number: int, port: int) -> dict:
     messages: list[dict] = []
     async with websockets.connect(f"ws://127.0.0.1:{port}") as ws:
-        await ws.recv()  # initial status
+        await ws.recv()
         await ws.send(json.dumps({"type": "ping"}))
         pong = json.loads(await ws.recv())
         messages.append(pong)
@@ -50,54 +88,50 @@ async def run_client_roundtrip(run_number: int, port: int) -> dict:
     progress = [m for m in messages if m["type"] == "progress"]
     return {
         "run": run_number,
-        "entry_point": "RunnerServer (main.py module path)",
+        "entry_point": "python main.py",
         "ping": pong["type"],
         "success": complete["success"],
         "progress_steps": len(progress),
         "error": complete.get("error"),
         "message_types": [m["type"] for m in messages],
+        "libraries_expected": ["pynput", "stdlib", "pynput", "pyautogui"],
     }
 
 
 async def main_async() -> int:
-    print("ForgeFlow runner verification via WebSocket server entry point")
+    port = _free_port()
+    print("ForgeFlow runner verification via python main.py (unpatched)")
     print(f"Sequence: {json.dumps(TEST_SEQUENCE, indent=2)}")
 
-    port = _free_port()
-    server = RunnerServer(host="127.0.0.1", port=port)
-    ready = asyncio.Event()
+    proc, server_lines = _launch_main_py(port)
 
-    with (
-        patch("forgeflow_runner.server.keyboard.add_hotkey"),
-        patch("forgeflow_runner.executor.pyautogui"),
-        patch("forgeflow_runner.executor.keyboard"),
-        patch("forgeflow_runner.executor.mouse"),
-        patch("forgeflow_runner.executor._mouse_controller") as mock_mouse,
-        patch("forgeflow_runner.executor._keyboard_controller") as mock_kb,
-    ):
-        mock_mouse.position = (0, 0)
-        mock_kb.type = MagicMock()
-
-        server_task = asyncio.create_task(server.start_for_test(ready_event=ready))
-        await asyncio.wait_for(ready.wait(), timeout=5)
-        print(f"RunnerServer listening on ws://127.0.0.1:{port}")
+    try:
+        if not await _wait_for_server(port):
+            print("ERROR: main.py did not become reachable in time")
+            return 1
 
         results = []
         for i in range(2):
-            result = await run_client_roundtrip(i + 1, port)
+            result = await _run_client_roundtrip(i + 1, port)
             results.append(result)
             print(f"\n--- Run {i + 1} ---")
             print(json.dumps(result, indent=2))
 
-        server_task.cancel()
-        try:
-            await server_task
-        except asyncio.CancelledError:
-            pass
+        all_ok = all(r["success"] for r in results)
+        print(f"\nAll runs successful: {all_ok}")
 
-    all_ok = all(r["success"] for r in results)
-    print(f"\nAll runs successful: {all_ok}")
-    return 0 if all_ok else 1
+        print("\n=== main.py stdout (library invocation evidence) ===")
+        for line in server_lines:
+            if "forgeflow.execute" in line or "pyautogui active" in line:
+                print(line.rstrip())
+
+        return 0 if all_ok else 1
+    finally:
+        proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
 
 
 def main() -> int:

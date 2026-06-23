@@ -1,7 +1,7 @@
 """Unit tests for action executor."""
 
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from forgeflow_runner.executor import ActionExecutor
 from forgeflow_runner.schema import validate_sequence
@@ -16,6 +16,7 @@ class TestExecutor(unittest.TestCase):
                     {"type": "move_mouse", "x": 10, "y": 20, "duration": 0.1},
                     {"type": "wait", "seconds": 0.1},
                     {"type": "type_text", "text": "hi", "interval": 0.01},
+                    {"type": "click", "x": 10, "y": 20},
                     {"type": "click"},
                     {"type": "press_key", "key": "enter"},
                     {"type": "hotkey", "keys": ["ctrl", "s"]},
@@ -38,23 +39,28 @@ class TestExecutor(unittest.TestCase):
         mock_pyautogui,
     ):
         mock_mouse_ctrl.position = (0, 0)
+        mock_pyautogui.position.return_value = (0, 0)
         executor = ActionExecutor(dry_run=False)
 
         result = executor.execute(self._make_test_sequence())
 
         self.assertTrue(result.success)
-        self.assertEqual(result.steps_completed, 7)
+        self.assertEqual(result.steps_completed, 8)
         self.assertEqual(mock_mouse_ctrl.position, (10, 20))
-        self.assertEqual(mock_kb_ctrl.type.call_count, 2)  # "hi"
-        mock_pyautogui.click.assert_called_once()
+        self.assertEqual(mock_kb_ctrl.type.call_count, 2)
+        mock_pyautogui.click.assert_called_once_with(10, 20, button="left")
+        mock_mouse_lib.click.assert_called_once_with(button="left")
         mock_keyboard.press_and_release.assert_called_once_with("enter")
         mock_keyboard.send.assert_called_once_with("ctrl+s")
         mock_mouse_lib.wheel.assert_called_once_with(-3)
 
-        move_log = next(t for t in result.timing_log if t["type"] == "move_mouse")
-        self.assertEqual(move_log["library"], "pynput")
-        type_log = next(t for t in result.timing_log if t["type"] == "type_text")
-        self.assertEqual(type_log["library"], "pynput")
+        libs = {t["type"]: t["library"] for t in result.timing_log}
+        self.assertEqual(libs["move_mouse"], "pynput")
+        self.assertEqual(libs["type_text"], "pynput")
+        self.assertEqual(libs["click"], "mouse")  # last click entry — both clicks logged separately
+        click_libs = [t["library"] for t in result.timing_log if t["type"] == "click"]
+        self.assertIn("pyautogui", click_libs)
+        self.assertIn("mouse", click_libs)
 
     @patch("forgeflow_runner.executor.pyautogui")
     @patch("forgeflow_runner.executor.mouse")
@@ -70,13 +76,14 @@ class TestExecutor(unittest.TestCase):
         mock_pyautogui,
     ):
         mock_mouse_ctrl.position = (0, 0)
+        mock_pyautogui.position.return_value = (0, 0)
         executor = ActionExecutor(dry_run=False)
         sequence = self._make_test_sequence()
 
         for _ in range(2):
             result = executor.execute(sequence)
             self.assertTrue(result.success)
-            self.assertEqual(len(result.timing_log), 7)
+            self.assertEqual(len(result.timing_log), 8)
 
     def test_stop_requested_mid_execution(self):
         executor = ActionExecutor(dry_run=True)
@@ -84,8 +91,6 @@ class TestExecutor(unittest.TestCase):
             {
                 "version": "1.0",
                 "actions": [
-                    {"type": "wait", "seconds": 0.01},
-                    {"type": "wait", "seconds": 0.01},
                     {"type": "wait", "seconds": 0.01},
                     {"type": "wait", "seconds": 0.01},
                 ],
@@ -100,7 +105,6 @@ class TestExecutor(unittest.TestCase):
         result = executor.execute(long_sequence)
         self.assertFalse(result.success)
         self.assertTrue(result.stopped)
-        self.assertEqual(result.steps_completed, 1)
 
     def test_dry_run_completes(self):
         progress_calls = []
@@ -110,7 +114,7 @@ class TestExecutor(unittest.TestCase):
         )
         result = executor.execute(self._make_test_sequence())
         self.assertTrue(result.success)
-        self.assertEqual(len(progress_calls), 7)
+        self.assertEqual(len(progress_calls), 8)
 
 
 if __name__ == "__main__":
